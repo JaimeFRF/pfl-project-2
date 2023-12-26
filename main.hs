@@ -74,33 +74,57 @@ state2Str state = state2StrSorted (sortOn fst state)
 executeInstruction :: Inst -> Stack -> State -> (Stack, State)
 executeInstruction instruction stack state = 
     case instruction of
+        Noop -> (stack, state)
         Push n -> (IntValue n : stack, state)
         Tru -> (BoolVal "tt" : stack, state)
         Fals -> (BoolVal "ff" : stack, state)
         Add -> case stack of
             (IntValue x : IntValue y : rest) -> (IntValue (x + y) : rest, state)
-            _ -> error "Add: Error on interpreting this instruction"
+            _ -> error "Run-time error"
         Mult -> case stack of
             (IntValue x : IntValue y : rest) -> (IntValue (x * y) : rest, state)
-            _ -> error "Mult: Error on interpreting this instruction"
+            _ -> error "Run-time error"
         Sub -> case stack of
             (IntValue x : IntValue y : rest) -> (IntValue (x - y) : rest, state)
-            _ -> error "Sub: Error on interpreting this instruction"
+            _ -> error "Run-time error"
         Le -> case stack of
-            (IntValue x : IntValue y : rest) | x /= y -> (BoolVal "ff" : rest, state)
-            (IntValue x : IntValue y : rest) -> (BoolVal "tt" : rest, state)
-            _ -> error "Le: Error on interpreting this instruction"
+            (IntValue x : IntValue y : rest) | x <= y -> (BoolVal "tt" : rest, state)
+            (IntValue x : IntValue y : rest) -> (BoolVal "ff" : rest, state)
+            _ -> error "Run-time error"
         Equ -> case stack of 
             (BoolVal x : BoolVal y : rest) | x == "tt" && y == "tt" -> (BoolVal "tt" : rest, state)
             (BoolVal x : BoolVal y : rest) -> (BoolVal "ff" : rest, state)
             (IntValue x : IntValue y : rest) | x /= y -> (BoolVal "ff" : rest, state)
             (IntValue x : IntValue y : rest) -> (BoolVal "tt" : rest, state)
-            _ -> error "Equ: Error on interpreting this instruction"
+            _ -> error "Run-time error"
         Store n -> case stack of
-            (x:xs) -> (xs, (n, x) : state)
+            (x:xs) -> let state' = filter ((/=n) . fst) state
+                      in (xs, (n, x) : state')
+            _ -> error "Run-time error"
         Fetch n -> case lookup n state of
             Just x -> (x:stack, state)
-            Nothing -> error "Fetch: Variable not found in the state"
+            Nothing -> error "Run-time error"
+        Neg -> case stack of
+            (BoolVal x : rest) | x == "tt" -> (BoolVal "ff" : rest, state)
+            (BoolVal x : rest) | x == "ff" -> (BoolVal "tt" : rest, state)
+        And -> case stack of 
+            (BoolVal x : BoolVal y : rest) |  x == "tt" && y == "tt" -> (BoolVal "tt" : rest, state)
+            (BoolVal x : BoolVal y : rest) -> (BoolVal "ff" : rest, state)
+            _ -> error "Run-time error"
+        Branch x y -> case stack of 
+            (BoolVal n : rest) | n == "tt" -> let (_, newStack, newState) = run (x, rest, state)
+                                              in (newStack, newState)
+            (BoolVal n : rest) -> let (_, newStack, newState) = run (y, rest, state)
+                                   in (newStack, newState)
+            _ -> error "Run-time error"
+        Loop c1 c2 ->
+            let
+                c2Instructions = c2 ++ [Loop c1 c2]
+                (_, newStack, newState) = run (c1 ++ [Branch c2Instructions [Noop]], stack, state)
+            in
+                (newStack, newState)
+
+
 
 
 
@@ -124,15 +148,16 @@ main = do
   print $ testAssembler [Fals,Store "var",Fetch "var"] == ("False","var=False")
   print $ testAssembler [Push (-20),Tru,Fals] == ("False,True,-20","")
   print $ testAssembler [Push (-20),Tru,Tru,Neg] == ("False,True,-20","")
--- print $ testAssembler [Push (-20),Tru,Tru,Neg,Equ] == ("False,-20","")
--- testAssembler [Push (-20),Push (-21), Le] == ("True","")
--- testAssembler [Push 5,Store "x",Push 1,Fetch "x",Sub,Store "x"] == ("","x=4")
--- testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
+  print $ testAssembler [Push (-20),Tru,Tru,Neg,Equ] == ("False,-20","")
+  print $ testAssembler [Push (-20),Push (-21), Le] == ("True","")
+  print $ testAssembler [Push 5,Store "x",Push 1,Fetch "x",Sub,Store "x"] == ("","x=4")
+  print $ testAssembler [Tru, Branch [Push 1, Push 4] [Push 2], Push 3] == ("3,4,1","")
+  print $ testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
 -- If you test:
--- testAssembler [Push 1,Push 2,And]
+--  print $ testAssembler [Push 1,Push 2,And]
 -- You should get an exception with the string: "Run-time error"
 -- If you test:
--- testAssembler [Tru,Tru,Store "y", Fetch "x",Tru]
+--  print $ testAssembler [Tru,Tru,Store "y", Fetch "x",Tru]
 -- You should get an exception with the string: "Run-time error"
 
 -- Part 2
