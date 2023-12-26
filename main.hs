@@ -1,5 +1,6 @@
 import Distribution.Simple.Utils (xargs)
 import Data.List (delete, sortOn)
+import Debug.Trace
 
 
 data Inst =
@@ -152,7 +153,18 @@ main = do
   print $ testAssembler [Push (-20),Push (-21), Le] == ("True","")
   print $ testAssembler [Push 5,Store "x",Push 1,Fetch "x",Sub,Store "x"] == ("","x=4")
   print $ testAssembler [Tru, Branch [Push 1, Push 4] [Push 2], Push 3] == ("3,4,1","")
+  print $ testAssembler [Push 5, Push 3, Le, Branch [Push 1] [Push 2]] == ("1","")
+  print $ testAssembler [Push 3, Push 5, Le, Branch [Push 1] [Push 2]] == ("2","")
+  print $ testAssembler [Push 5, Push 5, Equ, Branch [Push 1] [Push 2]] == ("1","")
+  print $ testAssembler [Push 5, Push 3, Equ, Branch [Push 1] [Push 2]] == ("2","")
+  print $ testAssembler [Fals, Branch [Push 1] [Push 2]] == ("2","")
+  print $ testAssembler [Tru, Branch [Push 1] [Push 2]] == ("1","")
   print $ testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
+  --While loop i = 0; while(i < 10); printf(i)
+  print $ testAssembler [Push 0, Store "i", Loop [Push 10, Fetch "i", Equ, Neg] [Push 1, Fetch "i", Add, Store "i"]] == ("", "i=10")
+{-int i = 1;int sum = 1;while(i < 10){sum = sum + i;i++;}-}
+  print $ testAssembler [Push 1, Store "sum", Push 1, Store "i", Loop [Push 10, Fetch "i", Equ, Neg] [Fetch "i", Fetch "sum", Add, Store "sum", Push 1, Fetch "i", Add, Store "i"]] == ("", "i=10,sum=46") 
+
 -- If you test:
 --  print $ testAssembler [Push 1,Push 2,And]
 -- You should get an exception with the string: "Run-time error"
@@ -189,3 +201,4 @@ parse = undefined -- TODO
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
 -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
 -- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
+
