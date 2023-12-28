@@ -2,7 +2,9 @@ import Distribution.Simple.Utils (xargs)
 import Data.List (delete, sortOn)
 import Debug.Trace
 import Data.Char (isSpace, isDigit, isAlpha)
-
+import qualified Text.Parsec as Parsec
+import Debug.Trace
+import Text.Parsec.String (Parser)
 
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
@@ -181,7 +183,6 @@ type Program = [Stm]
 
 data Token = PlusTok | MinusTok | TimesTok | DivTok | OpenTok | CloseTok | IntTok Int | VarTok String | AssignTok | SemicolonTok deriving (Show)
 
-
 -- compA 
 compA :: Aexp -> Code
 compA (Const n) = [Push n]
@@ -189,7 +190,6 @@ compA (Var x) = [Fetch x]
 compA (AddExp n1 n2) = compA n1 ++ compA n2 ++ [Add]
 compA (SubExp n1 n2) = compA n1 ++ compA n2 ++ [Sub]
 compA (MultExp n1 n2) = compA n1 ++ compA n2 ++ [Mult]
-
 
 -- compB 
 compB :: Bexp -> Code
@@ -217,13 +217,66 @@ lexer (c:cs)
   | isSpace c = lexer cs
   | isDigit c = let (number, rest) = span isDigit (c:cs) in number : lexer rest
   | otherwise = [c] : lexer cs  
- 
+
+parseArithmeticExpr :: Parser Aexp
+parseArithmeticExpr = Parsec.try parseValue Parsec.<|> parseVar
+
+parseValue :: Parser Aexp
+parseValue = do
+    val <- Parsec.many1 Parsec.digit
+    return (Const (read val))
+
+parseVar :: Parser Aexp
+parseVar = do
+    var <- Parsec.many1 Parsec.letter
+    return (Var var)
+
+-- parseAddition :: Parser Aexp
+-- parseAddition = do
+--     left <- parseValue <|> parseVar <|> (char '(' >> parseArithmeticExpr <* char ')')
+--     spaces
+--     char '+'
+--     spaces
+--     right <- parseValue <|> parseVar <|> (char '(' >> parseArithmeticExpr <* char ')')
+--     return (AddExp left right)
+
+-- parseSubtraction :: Parser Aexp
+-- parseSubtraction = do
+--     left <- parseValue <|> parseVar <|> (char '(' >> parseArithmeticExpr <* char ')')
+--     spaces
+--     char '-'
+--     spaces
+--     right <- parseValue <|> parseVar <|> (char '(' >> parseArithmeticExpr <* char ')')
+--     return (SubExp left right)
+
+-- parseMultiplication :: Parser Aexp
+-- parseMultiplication = do
+--     left <- parseValue <|> parseVar <|> (char '(' >> parseArithmeticExpr <* char ')')
+--     spaces
+--     char '*'
+--     spaces
+--     right <- parseValue <|> parseVar <|> (char '(' >> parseArithmeticExpr <* char ')')
+--     return (MultExp left right)
+
+parseAexpFromString :: String -> Either Parsec.ParseError Aexp
+parseAexpFromString input = parse parseArithmeticExpr "" input
 
 parse :: String -> Program
 parse str = parse' (lexer str)
 parse' :: [String] -> Program
 parse' [] = []
-parse' (var:":=":val:";":rest) = Assign var (Const (read val)) : parse' rest
+parse' (var:":=":expression:";":rest) =
+    let parsedExpression = parseAexpFromString expression
+    in trace (show expression) (Assign var parsedExpression : parse' rest)
+    --let parsedExpression = parseAexpFromString expression
+    --in Assign var parsedExpression : parse' rest
+--     -- str : ["y",":=","5",";"] 
+--   | Assign var (parse parseAexpFromString) : parse' rest
+--   | otherwise = let expr = parseAexpFromString (val:rest) in Assign var expr : parse' rest'
+
+-- parseExpr :: [String] -> (Aexp, [String])
+-- parseExpr (val1:"-":val2:";":rest) = (Sub (Var val1) (Const (read val2)), rest)
+-- parseExpr _ = error "Unexpected pattern in parseExpr"
 
 -- To help you test your parser
 testParser :: String -> (String, String)
@@ -234,7 +287,8 @@ testParser programCode = (stack2Str stack, state2Str state)
 main :: IO ()
 main = do
     -- print $ lexer "y := 5; x :=1; y := x - 1; x := y + 1;"
-    print $ testParser "y := 1;" == ("","y=1")
+    print $ parse "x :=5;"
+--    print $ testParser "y := 1; x := 2;"
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
 -- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)" == ("","x=1")
