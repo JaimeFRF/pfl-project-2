@@ -209,37 +209,33 @@ compile ((If x stm1 stm2):xs) = compB x ++ [Branch (compile [stm1]) (compile [st
 compile ((While x stm):xs) = [Loop (compB x) (compile [stm])] ++ compile xs
 compile ((Skip):xs) = compile xs -- necessário?
 
-lexer :: String -> [Token]
+lexer :: String -> [String]
 lexer [] = []
+lexer (':':'=':rest) = ":=" : lexer rest  
+lexer ('<':'=':rest) = "<=" : lexer rest  
 lexer (c:cs)
   | isSpace c = lexer cs
-  | isDigit c = let (number, rest) = span isDigit (c:cs) in IntTok (read number) : lexer rest
-  | isAlpha c = let (var, rest) = span isAlpha (c:cs) in VarTok var : lexer rest
-  | c == '+' = PlusTok : lexer cs
-  | c == '-' = MinusTok : lexer cs
-  | c == '*' = TimesTok : lexer cs
-  | c == '/' = DivTok : lexer cs
-  | c == '(' = OpenTok : lexer cs
-  | c == ')' = CloseTok : lexer cs
-  | c == ';' = SemicolonTok : lexer cs
-  | c == ':' && not (null cs) && head cs == '=' = AssignTok : lexer (tail cs)
-  | otherwise = error ("Unknown character: " ++ [c])
+  | isDigit c = let (number, rest) = span isDigit (c:cs) in number : lexer rest
+  | otherwise = [c] : lexer cs  
+ 
 
--- Example usage
-main :: IO ()
-main = print $ lexer "y := 5; x :=1; y := x - 1; x := y + 1;"
-
-
-
--- parse :: String -> Program
-parse = undefined -- TODO
+parse :: String -> Program
+-- need to call lexer using String
+parse str = parse' (lexer str)
+parse' :: [String] -> Program
+parse' [] = []
+parse' (var:":=":val:";":rest) = Assign var (read val) : parse' rest
 
 -- To help you test your parser
--- testParser :: String -> (String, String)
--- testParser programCode = (stack2Str stack, store2Str store)
---   where (_,stack,store) = run(compile (parse programCode), createEmptyStack, createEmptyStore)
+testParser :: String -> (String, String)
+testParser programCode = (stack2Str stack, state2Str state)
+  where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
 
 -- Examples:
+main :: IO ()
+main = do
+    -- print $ lexer "y := 5; x :=1; y := x - 1; x := y + 1;"
+    print $ testParser "y := 1;" == ("","y=1")
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
 -- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)" == ("","x=1")
