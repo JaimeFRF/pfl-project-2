@@ -1,6 +1,7 @@
 import Distribution.Simple.Utils (xargs)
 import Data.List (delete, sortOn)
 import Debug.Trace
+import Data.Char (isSpace, isDigit, isAlpha)
 
 
 data Inst =
@@ -125,10 +126,6 @@ executeInstruction instruction stack state =
             in
                 (newStack, newState)
 
-
-
-
-
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
 run (instruction:rest, stack, state) =
@@ -141,29 +138,32 @@ testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(code, createEmptyStack, createEmptyState)
 
+
+
+
 -- Examples:
-main :: IO()
-main = do 
-  print $ testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
-  print $ testAssembler [Fals,Push 3,Tru,Store "var",Store "a", Store "someVar"] == ("","a=3,someVar=False,var=True")
-  print $ testAssembler [Fals,Store "var",Fetch "var"] == ("False","var=False")
-  print $ testAssembler [Push (-20),Tru,Fals] == ("False,True,-20","")
-  print $ testAssembler [Push (-20),Tru,Tru,Neg] == ("False,True,-20","")
-  print $ testAssembler [Push (-20),Tru,Tru,Neg,Equ] == ("False,-20","")
-  print $ testAssembler [Push (-20),Push (-21), Le] == ("True","")
-  print $ testAssembler [Push 5,Store "x",Push 1,Fetch "x",Sub,Store "x"] == ("","x=4")
-  print $ testAssembler [Tru, Branch [Push 1, Push 4] [Push 2], Push 3] == ("3,4,1","")
-  print $ testAssembler [Push 5, Push 3, Le, Branch [Push 1] [Push 2]] == ("1","")
-  print $ testAssembler [Push 3, Push 5, Le, Branch [Push 1] [Push 2]] == ("2","")
-  print $ testAssembler [Push 5, Push 5, Equ, Branch [Push 1] [Push 2]] == ("1","")
-  print $ testAssembler [Push 5, Push 3, Equ, Branch [Push 1] [Push 2]] == ("2","")
-  print $ testAssembler [Fals, Branch [Push 1] [Push 2]] == ("2","")
-  print $ testAssembler [Tru, Branch [Push 1] [Push 2]] == ("1","")
-  print $ testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
-  --While loop i = 0; while(i < 10); printf(i)
-  print $ testAssembler [Push 0, Store "i", Loop [Push 10, Fetch "i", Equ, Neg] [Push 1, Fetch "i", Add, Store "i"]] == ("", "i=10")
-{-int i = 1;int sum = 1;while(i < 10){sum = sum + i;i++;}-}
-  print $ testAssembler [Push 1, Store "sum", Push 1, Store "i", Loop [Push 10, Fetch "i", Equ, Neg] [Fetch "i", Fetch "sum", Add, Store "sum", Push 1, Fetch "i", Add, Store "i"]] == ("", "i=10,sum=46") 
+-- main :: IO()
+-- main = do 
+--   print $ testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
+--   print $ testAssembler [Fals,Push 3,Tru,Store "var",Store "a", Store "someVar"] == ("","a=3,someVar=False,var=True")
+--   print $ testAssembler [Fals,Store "var",Fetch "var"] == ("False","var=False")
+--   print $ testAssembler [Push (-20),Tru,Fals] == ("False,True,-20","")
+--   print $ testAssembler [Push (-20),Tru,Tru,Neg] == ("False,True,-20","")
+--   print $ testAssembler [Push (-20),Tru,Tru,Neg,Equ] == ("False,-20","")
+--   print $ testAssembler [Push (-20),Push (-21), Le] == ("True","")
+--   print $ testAssembler [Push 5,Store "x",Push 1,Fetch "x",Sub,Store "x"] == ("","x=4")
+--   print $ testAssembler [Tru, Branch [Push 1, Push 4] [Push 2], Push 3] == ("3,4,1","")
+--   print $ testAssembler [Push 5, Push 3, Le, Branch [Push 1] [Push 2]] == ("1","")
+--   print $ testAssembler [Push 3, Push 5, Le, Branch [Push 1] [Push 2]] == ("2","")
+--   print $ testAssembler [Push 5, Push 5, Equ, Branch [Push 1] [Push 2]] == ("1","")
+--   print $ testAssembler [Push 5, Push 3, Equ, Branch [Push 1] [Push 2]] == ("2","")
+--   print $ testAssembler [Fals, Branch [Push 1] [Push 2]] == ("2","")
+--   print $ testAssembler [Tru, Branch [Push 1] [Push 2]] == ("1","")
+--   print $ testAssembler [Push 10,Store "i",Push 1,Store "fact",Loop [Push 1,Fetch "i",Equ,Neg] [Fetch "i",Fetch "fact",Mult,Store "fact",Push 1,Fetch "i",Sub,Store "i"]] == ("","fact=3628800,i=1")
+--   --While loop i = 0; while(i < 10); printf(i)
+--   print $ testAssembler [Push 0, Store "i", Loop [Push 10, Fetch "i", Equ, Neg] [Push 1, Fetch "i", Add, Store "i"]] == ("", "i=10")
+-- -- {-int i = 1;int sum = 1;while(i < 10){sum = sum + i;i++;}-}
+--   print $ testAssembler [Push 1, Store "sum", Push 1, Store "i", Loop [Push 10, Fetch "i", Equ, Neg] [Fetch "i", Fetch "sum", Add, Store "sum", Push 1, Fetch "i", Add, Store "i"]] == ("", "i=10,sum=46") 
 
 -- If you test:
 --  print $ testAssembler [Push 1,Push 2,And]
@@ -174,16 +174,62 @@ main = do
 
 -- Part 2
 
--- TODO: Define the types Aexp, Bexp, Stm and Program
+data Aexp = Const Integer | Var String | AddExp Aexp Aexp | SubExp Aexp Aexp | MultExp Aexp Aexp
+data Bexp = BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Aexp Aexp | LessOrEqual Aexp Aexp
+data Stm = Assign String Aexp | Seq [Stm] | If Bexp Stm Stm | While Bexp Stm | Skip
+type Program = [Stm]
 
--- compA :: Aexp -> Code
-compA = undefined -- TODO
+data Token = PlusTok | MinusTok | TimesTok | DivTok | OpenTok | CloseTok | IntTok Int | VarTok String | AssignTok | SemicolonTok deriving (Show)
 
--- compB :: Bexp -> Code
-compB = undefined -- TODO
 
--- compile :: Program -> Code
-compile = undefined -- TODO
+-- compA 
+compA :: Aexp -> Code
+compA (Const n) = [Push n]
+compA (Var x) = [Fetch x]
+compA (AddExp n1 n2) = compA n1 ++ compA n2 ++ [Add]
+compA (SubExp n1 n2) = compA n1 ++ compA n2 ++ [Sub]
+compA (MultExp n1 n2) = compA n1 ++ compA n2 ++ [Mult]
+
+
+-- compB 
+compB :: Bexp -> Code
+compB (BoolConst x) = [if x then Tru else Fals]
+compB (AndExp x1 x2) = compB x1 ++ compB x2 ++ [And]
+compB (Or x1 x2) = compB x1 ++ compB x2 ++ [Branch [Tru] [Fals]]
+compB (Not x) = compB x ++ [Neg]
+compB (Eq x1 x2) = compA x1 ++ compA x2 ++ [Equ]
+compB (LessOrEqual x1 x2) = compA x1 ++ compA x2 ++ [Le]
+
+-- compile 
+compile :: Program -> Code
+compile [] = []
+compile ((Assign x a):xs) = compA a ++ [Store x] ++ compile xs
+compile ((Seq stms):xs) = compile stms ++ compile xs
+compile ((If x stm1 stm2):xs) = compB x ++ [Branch (compile [stm1]) (compile [stm2])] ++ compile xs
+compile ((While x stm):xs) = [Loop (compB x) (compile [stm])] ++ compile xs
+compile ((Skip):xs) = compile xs -- necessário?
+
+lexer :: String -> [Token]
+lexer [] = []
+lexer (c:cs)
+  | isSpace c = lexer cs
+  | isDigit c = let (number, rest) = span isDigit (c:cs) in IntTok (read number) : lexer rest
+  | isAlpha c = let (var, rest) = span isAlpha (c:cs) in VarTok var : lexer rest
+  | c == '+' = PlusTok : lexer cs
+  | c == '-' = MinusTok : lexer cs
+  | c == '*' = TimesTok : lexer cs
+  | c == '/' = DivTok : lexer cs
+  | c == '(' = OpenTok : lexer cs
+  | c == ')' = CloseTok : lexer cs
+  | c == ';' = SemicolonTok : lexer cs
+  | c == ':' && not (null cs) && head cs == '=' = AssignTok : lexer (tail cs)
+  | otherwise = error ("Unknown character: " ++ [c])
+
+-- Example usage
+main :: IO ()
+main = print $ lexer "y := 5; x :=1; y := x - 1; x := y + 1;"
+
+
 
 -- parse :: String -> Program
 parse = undefined -- TODO
