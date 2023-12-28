@@ -220,11 +220,10 @@ lexer (c:cs)
  
 
 parse :: String -> Program
--- need to call lexer using String
 parse str = parse' (lexer str)
 parse' :: [String] -> Program
 parse' [] = []
-parse' (var:":=":val:";":rest) = Assign var (read val) : parse' rest
+parse' (var:":=":val:";":rest) = Assign var (Const (read val)) : parse' rest
 
 -- To help you test your parser
 testParser :: String -> (String, String)
