@@ -1,7 +1,7 @@
 import Distribution.Simple.Utils (xargs)
 import Data.List (delete, sortOn)
 import Debug.Trace
-import Data.Char (isSpace, isDigit, isAlpha)
+import Data.Char (isSpace, isDigit, isAlpha, isAlphaNum)  -- Add isAlphaNum here
 
 
 data Inst =
@@ -174,12 +174,12 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- Part 2
 
-data Aexp = Const Integer | Var String | AddExp Aexp Aexp | SubExp Aexp Aexp | MultExp Aexp Aexp
-data Bexp = BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Aexp Aexp | LessOrEqual Aexp Aexp
-data Stm = Assign String Aexp | Seq [Stm] | If Bexp Stm Stm | While Bexp Stm | Skip
+data Aexp = Const Integer | Var String | AddExp Aexp Aexp | SubExp Aexp Aexp | MultExp Aexp Aexp deriving (Show)
+data Bexp = BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Aexp Aexp | LessOrEqual Aexp Aexp deriving (Show)
+data Stm = Assign String Aexp | Seq [Stm] | If Bexp Stm Stm | While Bexp Stm | Skip deriving (Show)
 type Program = [Stm]
 
-data Token = PlusTok | MinusTok | TimesTok | DivTok | OpenTok | CloseTok | IntTok Int | VarTok String | AssignTok | SemicolonTok deriving (Show)
+data Token = PlusTok | MinusTok | TimesTok | DivTok | OpenTok | CloseTok | IntTok Integer | VarTok String | AssignTok | SemicolonTok deriving (Show)
 
 
 -- compA 
@@ -187,7 +187,7 @@ compA :: Aexp -> Code
 compA (Const n) = [Push n]
 compA (Var x) = [Fetch x]
 compA (AddExp n1 n2) = compA n1 ++ compA n2 ++ [Add]
-compA (SubExp n1 n2) = compA n1 ++ compA n2 ++ [Sub]
+compA (SubExp n1 n2) = compA n2 ++ compA n1 ++ [Sub]
 compA (MultExp n1 n2) = compA n1 ++ compA n2 ++ [Mult]
 
 
@@ -209,21 +209,84 @@ compile ((If x stm1 stm2):xs) = compB x ++ [Branch (compile [stm1]) (compile [st
 compile ((While x stm):xs) = [Loop (compB x) (compile [stm])] ++ compile xs
 compile ((Skip):xs) = compile xs -- necessário?
 
-lexer :: String -> [String]
+lexer :: String -> [Token]
 lexer [] = []
-lexer (':':'=':rest) = ":=" : lexer rest  
-lexer ('<':'=':rest) = "<=" : lexer rest  
+lexer ('+' : restStr) = PlusTok : lexer restStr
+lexer ('-' : restStr) = MinusTok : lexer restStr
+lexer ('*' : restStr) = TimesTok : lexer restStr
+lexer ('/' : restStr) = DivTok : lexer restStr
+lexer ('(' : restStr) = OpenTok : lexer restStr
+lexer (')' : restStr) = CloseTok : lexer restStr
+lexer (':':'=':rest) = AssignTok : lexer rest 
+lexer (';' : restStr) = SemicolonTok : lexer restStr
 lexer (c:cs)
   | isSpace c = lexer cs
-  | isDigit c = let (number, rest) = span isDigit (c:cs) in number : lexer rest
-  | otherwise = [c] : lexer cs  
- 
+  | isDigit c = let (number, rest) = span isDigit (c:cs) in IntTok (read number) : lexer rest
+  | isAlpha c = let (var, rest) = span isAlphaNum (c:cs) in VarTok var : lexer rest
+  | otherwise = error $ "Unexpected character: " ++ [c]
+
+parseAexp :: [Token] -> Maybe (Aexp, [Token])
+parseAexp tokens = 
+  case tokens of
+    (IntTok n : restTokens) -> Just (Const n, restTokens)
+    (VarTok v : restTokens) -> Just (Var v, restTokens)
+    _ -> Nothing
+
+
+parseAexpOrPar :: [Token] -> Maybe (Aexp, [Token])
+parseAexpOrPar (OpenTok : restTokens1)
+    = case parseAddOrSubMultOrAexpOrPar restTokens1 of 
+        Just (expr, (CloseTok : restTokens2)) ->
+                Just (expr, restTokens2)
+        Just _ -> Nothing
+        Nothing -> Nothing
+parseAexpOrPar tokens = parseAexp tokens
+
+parseMultOrAexpOrPar :: [Token] -> Maybe (Aexp, [Token])
+parseMultOrAexpOrPar tokens
+    = case parseAexpOrPar tokens of 
+        Just (expr1, (TimesTok : restTokens1)) ->
+            case parseMultOrAexpOrPar restTokens1 of
+                Just (expr2, restTokens2) -> Just (MultExp expr1 expr2, restTokens2)
+                Nothing -> Nothing
+        result -> result
+
+parseAddOrSubMultOrAexpOrPar :: [Token] -> Maybe (Aexp, [Token])
+parseAddOrSubMultOrAexpOrPar tokens = 
+  case parseMultOrAexpOrPar tokens of
+    Just (expr1, (PlusTok : restTokens1)) ->
+      case parseAddOrSubMultOrAexpOrPar restTokens1 of
+        Just (expr2, restTokens2) -> Just (AddExp expr1 expr2, restTokens2)
+        Nothing -> Nothing
+    Just (expr1, (MinusTok : restTokens1)) ->
+      case parseAddOrSubMultOrAexpOrPar restTokens1 of
+        Just (expr2, restTokens2) -> Just (SubExp expr1 expr2, restTokens2)
+        Nothing -> Nothing
+    result -> result
+
+parseStm :: [Token] -> Maybe (Stm, [Token])
+parseStm tokens =
+  case tokens of
+    (VarTok v : AssignTok : restTokens1) ->
+      case parseAddOrSubMultOrAexpOrPar restTokens1 of
+        Just (expr, restTokens2) -> Just (Assign v expr, restTokens2)
+        Nothing -> Nothing
+    (SemicolonTok : restTokens) -> Just (Skip, restTokens)
+    _ -> Nothing
 
 parse :: String -> Program
-parse str = parse' (lexer str)
-parse' :: [String] -> Program
-parse' [] = []
-parse' (var:":=":val:";":rest) = Assign var (Const (read val)) : parse' rest
+parse str = parseProgram (lexer str)
+
+parseProgram :: [Token] -> Program
+parseProgram tokens = 
+  case tokens of
+    [] -> []
+    _ ->
+      case parseStm tokens of
+        Just (stm, restTokens) -> stm : parseProgram restTokens
+        _ -> []
+
+
 
 -- To help you test your parser
 testParser :: String -> (String, String)
@@ -233,8 +296,9 @@ testParser programCode = (stack2Str stack, state2Str state)
 -- Examples:
 main :: IO ()
 main = do
-    -- print $ lexer "y := 5; x :=1; y := x - 1; x := y + 1;"
-    print $ testParser "y := 1;" == ("","y=1")
+    print $ testParser "x := 5; x := x - 1;" == ("","x=4") 
+    print $ testParser "x := 0 - 2;"  == ("","x=-2")
+    print $ testParser "y := 1 + 2 * 3; x := 1" == ("", "x=1,y=7")
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
 -- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)" == ("","x=1")
