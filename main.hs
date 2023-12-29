@@ -175,7 +175,7 @@ testAssembler code = (stack2Str stack, state2Str state)
 -- Part 2
 
 data Aexp = Const Integer | Var String | AddExp Aexp Aexp | SubExp Aexp Aexp | MultExp Aexp Aexp deriving (Show)
-data Bexp = BConst Integer | BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Bexp Bexp | BTrue | BFalse| LessOrEqual Bexp Bexp deriving (Show)
+data Bexp = BVar String | BConst Integer | BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Bexp Bexp | BTrue | BFalse| LessOrEqual Bexp Bexp deriving (Show)
 data Stm = Assign String Aexp | Seq [Stm] | If Bexp Stm Stm | While Bexp Stm | Skip deriving (Show)
 type Program = [Stm]
 
@@ -196,6 +196,7 @@ compA (MultExp n1 n2) = compA n1 ++ compA n2 ++ [Mult]
 compB :: Bexp -> Code
 compB (BoolConst x) = [if x then Tru else Fals]
 compB (BConst n) = [Push n]
+compB (BVar n) = [Fetch n]
 compB (BTrue) = [Tru]
 compB (BFalse) = [Fals]
 compB (AndExp x1 x2) = compB x1 ++ compB x2 ++ [And]
@@ -279,22 +280,22 @@ parseAddOrSubMultOrAexpOrPar tokens =
 
 parseInteger :: [Token] -> Maybe (Bexp, [Token])
 parseInteger (OpenTok : restTokens1) =
-    case  trace ("foda-se 6") $ parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
+    case  parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
         Just (expr, (CloseTok : restTokens2)) ->
             Just (expr, restTokens2)
         Just _ -> Nothing
         Nothing -> Nothing
 parseInteger (IntTok n : restTokens) = Just (BConst n, restTokens)
 parseInteger (TrueTok : restTokens) =  Just (BTrue, restTokens)
--- Falta lidar com uma variavel
+parseInteger (VarTok n : restTokens) = Just (BVar n, restTokens)
 parseInteger _ = Nothing
 
 parseInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
 parseInequalityOrInt tokens = 
-    case parseInteger tokens of 
+    case  parseInteger tokens of 
         Just (expr1, (LtTok : restTokens1)) ->
             case parseInteger restTokens1 of
-                Just (expr2, restTokens2) -> Just (LessOrEqual expr1 expr2, restTokens2)
+                Just (expr2, restTokens2) -> Just (LessOrEqual expr2 expr1, restTokens2)
                 Nothing -> Nothing
         result -> result
 
@@ -341,9 +342,9 @@ parseStm tokens =
         (IfTok : restTokens1) ->
             case parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
                 Just (cond, ThenTok : restTokens2) ->
-                    case parseStm restTokens2 of
+                    case  parseStm restTokens2 of
                         Just (stm1, SemicolonTok : ElseTok : restTokens3) ->
-                            case parseStm restTokens3 of
+                            case  parseStm restTokens3 of
                                 Just (stm2, restTokens4) -> Just (If cond stm1 stm2, restTokens4)
                                 Nothing -> Nothing
                         Nothing ->   Nothing
@@ -380,10 +381,11 @@ main :: IO ()
 main = do
     --print $ testParser "x := 5; x := x - 1;" == ("","x=4") 
     --print $ testParser "x := 0 - 2;"  == ("","x=-2")
-    print $ compile(parse "y := 1 + 2 * 3; x := 1") 
+   -- print $ compile(parse "y := 1 + 2 * 3; x := 1") 
    -- print $ testParser "x := (1+2+3)*3" 
-   -- print $  parse ("if (not True and 2 <= 5 = 3 == 4) then x := 1; else y := 2;") 
---    print $ parse ("x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)") 
+   print $ testParser ("if (not True and 2 <= 5 = 3 == 4) then x := 1; else y := 2;") 
+   print $ parse ("x := 42; if x <= 43 then x := 1; else x := 33;")
+   print $ parse ("x := 42; if x <= 43 then x := 1; else (x := 33;);")
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
 -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
