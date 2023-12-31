@@ -324,13 +324,19 @@ parseStmSeq tokens = loop tokens []
   where
     loop [] acc = Just (reverse acc, [])
     loop (ElseTok : rest) acc = Just (reverse acc, ElseTok : rest)
+    loop (OpenTok : rest) acc = 
+        case parseStm rest of
+          Just (stm, restTokens) ->
+            case  restTokens of
+                (SemicolonTok : restTokens') -> loop restTokens' (stm : acc)
+                (CloseTok : restTokens') -> loop restTokens' (stm : acc)
+                _ -> Just (reverse (stm : acc), restTokens)
     loop tokens acc =
       case parseStm tokens of
         Just (stm, restTokens) ->
           case restTokens of
             (SemicolonTok : restTokens') -> loop restTokens' (stm : acc)
             _ -> Just (reverse (stm : acc), restTokens)
-        Nothing -> Nothing
         
 parseElseBlock :: [Token] -> Maybe ([Stm], [Token])
 parseElseBlock tokens = 
@@ -371,7 +377,7 @@ parseStm :: [Token] -> Maybe (Stm, [Token])
 parseStm tokens = 
     case tokens of
         (IfTok : restTokens1) ->
-            case parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
+            case  parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
                 Just (cond, ThenTok : restTokens2) ->
                     case parseStmSeq restTokens2 of
                         Just (stmSeqThen, ElseTok : restTokens3) ->
@@ -382,7 +388,7 @@ parseStm tokens =
                                         Just (stmElse, restTokens4) -> Just (If [cond] stmSeqThen [stmElse], restTokens4)
                                         Nothing -> error "Error parsing Else branch"
                         Nothing -> error "Error parsing Then branch"
-                Nothing -> error "Error parsing condition of If Statement"
+                Nothing -> error "Error parsing condition of If Statement"       
         (WhileTok : restTokens1) ->
             case parseStmSeqUntilDo restTokens1 of
                 Just (cond, DoTok : restTokens2) ->
@@ -391,7 +397,7 @@ parseStm tokens =
                         Nothing -> error "Error parsing Do block"
                 Nothing -> error "Error parsing condition of While Statement"
         (VarTok v : AssignTok : restTokens1) ->
-            case  parseAddOrSubMultOrAexpOrPar restTokens1 of
+            case parseAddOrSubMultOrAexpOrPar restTokens1 of
                 Just (expr, restTokens2) -> Just (Assign v expr, restTokens2)
                 Nothing -> Nothing
         (OpenTok : VarTok v : AssignTok : restTokens1) ->
@@ -482,6 +488,8 @@ main = do
     print $ testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
     print $ testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
     print $ testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
+    print $ testParser "x := 42; if x <= 43 then (x := 1; x:= x+ 1;); else (x := 33; x := x+1;);" == ("","x=2")
+    print $ testParser "x := 42; if x <= 43 then (if x <= 42 then (x := 1; x:= x + 1;); else x := 33;); else x := x+1;" == ("", "x=2")
     ---------------------------------------------------------------------------------------
     -- putStrLn "Enter the program code:"
     -- programCode <- getLine
