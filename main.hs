@@ -75,6 +75,7 @@ state2Str state = state2StrSorted (sortOn fst state)
 
 executeInstruction :: Inst -> Stack -> State -> (Stack, State)
 executeInstruction instruction stack state = 
+    -- trace ("executeInstruction called with instruction: " ++ show instruction ++ ", stack: " ++ show stack ++ ", state: " ++ show state) $ 
     case instruction of
         Noop -> (stack, state)
         Push n -> (IntValue n : stack, state)
@@ -113,7 +114,9 @@ executeInstruction instruction stack state =
             (BoolVal x : BoolVal y : rest) |  x == "tt" && y == "tt" -> (BoolVal "tt" : rest, state)
             (BoolVal x : BoolVal y : rest) -> (BoolVal "ff" : rest, state)
             _ -> error "Run-time error"
-        Branch x y -> case stack of 
+        Branch x y -> 
+            -- trace "Executing Branch instruction" $ 
+            case stack of
             (BoolVal n : rest) | n == "tt" -> let (_, newStack, newState) = run (x, rest, state)
                                               in (newStack, newState)
             (BoolVal n : rest) -> let (_, newStack, newState) = run (y, rest, state)
@@ -175,13 +178,12 @@ testAssembler code = (stack2Str stack, state2Str state)
 -- Part 2
 
 data Aexp = Const Integer | Var String | AddExp Aexp Aexp | SubExp Aexp Aexp | MultExp Aexp Aexp | ASkip deriving (Show)
-data Bexp = BVar String | BConst Integer | BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Bexp Bexp | BTrue | BFalse| LessOrEqual Bexp Bexp deriving (Show)
+data Bexp = BVar String | BConst Integer | BoolConst Bool | AndExp Bexp Bexp | Or Bexp Bexp | Not Bexp | Eq Bexp Bexp | BTrue | BFalse| LessOrEqual Bexp Bexp | EqAexp Aexp Aexp deriving (Show)
 data Stm = Assign String Aexp | Seq [Stm] | If Bexp [Stm] [Stm] | While Bexp Stm | Skip deriving (Show)
 type Program = [Stm]
 
 data Token = PlusTok | MinusTok | TimesTok | DivTok | OpenTok | CloseTok | IntTok Integer | VarTok String | AssignTok | 
             TrueTok | FalseTok | AndTok | OrTok | NotTok | EqTok | LtTok | IfTok | ThenTok | IntEqTok | BoolEqTok|  ElseTok | SemicolonTok deriving (Show)
-
 
 -- compA 
 compA :: Aexp -> Code
@@ -191,7 +193,6 @@ compA (Var x) = [Fetch x]
 compA (AddExp n1 n2) = compA n1 ++ compA n2 ++ [Add]
 compA (SubExp n1 n2) = compA n2 ++ compA n1 ++ [Sub]
 compA (MultExp n1 n2) = compA n1 ++ compA n2 ++ [Mult]
-
 
 -- compB 
 compB :: Bexp -> Code
@@ -205,6 +206,7 @@ compB (Or x1 x2) = compB x1 ++ compB x2 ++ [Branch [Tru] [Fals]]
 compB (Not x) = compB x ++ [Neg]
 compB (Eq x1 x2) = compB x1 ++ compB x2 ++ [Equ]
 compB (LessOrEqual x1 x2) = compB x1 ++ compB x2 ++ [Le]
+compB (EqAexp x1 x2) = compA x1 ++ compA x2 ++ [Equ]
 
 -- compile 
 compile :: Program -> Code
@@ -213,7 +215,7 @@ compile ((Assign x a):xs) = compA a ++ [Store x] ++ compile xs
 compile ((Seq stms):xs) = compile stms ++ compile xs
 compile ((If x stm1 stm2):xs) = compB x ++ [Branch (compile stm1) (compile stm2)] ++ compile xs
 compile ((While x stm):xs) = [Loop (compB x) (compile [stm])] ++ compile xs
-compile ((Skip):xs) = compile xs -- necessário?
+compile ((Skip):xs) = compile xs
 
 lexer :: String -> [Token]
 lexer [] = []
@@ -242,10 +244,10 @@ lexer (c:cs)
 
 parseAexp :: [Token] -> Maybe (Aexp, [Token])
 parseAexp tokens = 
-  case tokens of
-    (IntTok n : restTokens) -> Just (Const n, restTokens)
-    (VarTok v : restTokens) -> Just (Var v, restTokens)
-    _ -> Nothing
+    case tokens of
+        (IntTok n : restTokens) -> Just (Const n, restTokens)
+        (VarTok v : restTokens) -> Just (Var v, restTokens)
+        _ -> Nothing
 
 
 parseAexpOrPar :: [Token] -> Maybe (Aexp, [Token])
@@ -318,14 +320,40 @@ parseNegationOrEqualityOrInequalityOrInt tokens =
                 Nothing -> Nothing
         _ -> parseEqualityOrInequalityOrInt tokens
 
+
 parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
-parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens = 
-    case  parseNegationOrEqualityOrInequalityOrInt tokens of
-        Just (expr1, (BoolEqTok : restTokens1)) ->
-            case parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
-                Just (expr2, restTokens2) -> Just (Eq expr1 expr2, restTokens2)
-                Nothing -> Nothing
-        result -> result
+parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens =
+    -- case parseAddOrSubMultOrAexpOrPar tokens of
+    --     Just (aexp1, IntEqTok : restTokens1) ->
+    --         trace ("BEFORE PARSEQ, tokens: " ++ show aexp1) $
+    --         case parseAddOrSubMultOrAexpOrPar restTokens1 of
+    --             Just (aexp2, restTokens2) -> 
+    --                 trace ("AFTER PARSEQ, tokens: " ++ show aexp2 ++ show restTokens2) $
+    --                 Just (EqAexp aexp1 aexp2, restTokens2)
+    --             Nothing -> error "Error parsing Then branch"
+    --     Nothing -> 
+            case parseNegationOrEqualityOrInequalityOrInt tokens of
+                Just (expr1, BoolEqTok : restTokens1) ->
+                    trace ("BEFORE PARSENEG, tokens: " ++ show expr1) $
+                    case parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
+                        Just (expr2, restTokens2) -> Just (Eq expr1 expr2, restTokens2)
+                        Nothing -> Nothing
+                result -> result
+
+-- parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
+-- parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens =
+--     case break (== BoolEqTok) tokens of
+--         (leftTokens, BoolEqTok : rightTokens) -> 
+--             case parseNegationOrEqualityOrInequalityOrInt leftTokens of
+--                 Just (leftExpr, []) ->
+--                     trace ("left-part tokens: " ++ show leftExpr) $
+--                     case parseNegationOrEqualityOrInequalityOrInt rightTokens of
+--                         Just (rightExpr, remainingTokens) -> 
+--                             Just (Eq leftExpr rightExpr, remainingTokens)
+--                             trace ("right-part tokens: " ++ show rightExpr)
+--                         Nothing -> error "Error parsing right side of boolean equality"
+--                 _ -> error "Error parsing left side of boolean equality"
+--         _ -> Nothing
 
 parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
 parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens = 
@@ -369,17 +397,22 @@ parseStm :: [Token] -> Maybe (Stm, [Token])
 parseStm tokens = 
     case tokens of
         (IfTok : restTokens1) ->
+            -- trace ("Parsing If Statement, tokens: " ++ show restTokens1) $
             case parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
                 Just (cond, ThenTok : restTokens2) ->
+                    -- trace ("Parsed condition of If Statement, tokens: " ++ show restTokens2) $
                     case parseStmSeq restTokens2 of
                         Just (stmSeqThen, ElseTok : restTokens3) ->
+                            -- trace ("Parsed Then branch of If Statement, tokens: " ++ show restTokens3) $
                             case parseElseBlock restTokens3 of
                                 Just (stmSeqElse, restTokens4) -> Just (If cond stmSeqThen stmSeqElse, restTokens4)
                                 Nothing ->  
+                                    -- trace ("Parsing Else branch of If Statement, tokens: " ++ show restTokens3) $
                                     case parseStm restTokens3 of
                                         Just (stmElse, restTokens4) -> Just (If cond stmSeqThen [stmElse], restTokens4)
-                                        Nothing -> Nothing
-
+                                        Nothing -> error "Error parsing Else branch"
+                        Nothing -> error "Error parsing Then branch"
+                Nothing -> error "Error parsing condition of If Statement"
         (VarTok v : AssignTok : restTokens1) ->
             case  parseAddOrSubMultOrAexpOrPar restTokens1 of
                 Just (expr, restTokens2) -> Just (Assign v expr, restTokens2)
@@ -397,6 +430,7 @@ parseStm tokens =
 parse :: String -> Program
 parse str = parseProgram (lexer str)
 
+
 parseProgram :: [Token] -> Program
 parseProgram tokens = 
   case tokens of
@@ -413,6 +447,20 @@ testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
 
+-- Function to execute a program from a string and print the stack and state
+executeProgram :: String -> IO ()
+executeProgram programCode = do
+    -- Parse the program
+    let program = parse programCode
+    let code = compile program
+
+    let (_, finalStack, finalState) = run (code, createEmptyStack, createEmptyState)
+
+    putStrLn "Final Stack:"
+    putStrLn (stack2Str finalStack)
+    putStrLn "Final State:"
+    putStrLn (state2Str finalState)
+
 -- Examples:
 main :: IO ()
 main = do
@@ -424,20 +472,15 @@ main = do
     print $ testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
     print $ testParser "x := 44; if x <= 43 then x := 1; else (x := 33; x := x+1;); y := x*2;" == ("","x=34,y=68")
     print $ testParser "x := 42; if x <= 43 then (x := 33; x := x+1;) else x := 1;" == ("","x=34")
-    print $ testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
-    --print $ testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
-    --print $ testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
-
-   --print $ testParser "x := 5; x := x - 1;" == ("","x=4") 
-   --print $ testParser "x := 0 - 2;"  == ("","x=-2")
-   --print $ testParser "y := 1 + 2 * 3; x := 1" 
-   --print $ testParser "x := (1+2+3)*3" 
-   --print $ testParser ("if (not True and 2 <= 5 = 3 == 4) then x := 1; else y := 2;") 
-  -- print $ testParser ("x := 42; if x <= 43 then (x := 1; x := x + 1;); else (x := 33;);") 
-    --print $ testParser ("x := 42; if x <= 43 then x := 1; else (x := 3; x := x + 1)")
-   --print $ testParser "x := 42; if x <= 43 then (x := 1; x := x + 1;) else (x := 33; x := x+1;);" 
-   --print $ testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
-   --print $ testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
--- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
-
---[Push 3,Equ,Push 4,Equ,And,Branch [Push 1,Store "x"] [Push 2,Store "y"]]
+    -- testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
+    -- let programCode = "if (-- testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
+    -- let parsedResult = parse programCode
+    -- putStrLn "Parsed Result:"
+    -- print parsedResult
+    -- print $ testParser "if (1+1 == 2 = 1 == 1) then x := 1; else x := 2;" == ("","x=1")
+    -- print $ testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
+    print $ testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
+    -- print $ testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
+    putStrLn "Enter the program code:"
+    programCode <- getLine
+    executeProgram programCode
