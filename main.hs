@@ -283,15 +283,28 @@ parseAddOrSubMultOrAexpOrPar tokens =
 
 parseInteger :: [Token] -> Maybe (Bexp, [Token])
 parseInteger (OpenTok : restTokens1) =
-    case  parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
+    trace ("Parsing OpenTok with restTokens: " ++ show restTokens1) $
+    case parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
         Just (expr, (CloseTok : restTokens2)) ->
             Just (expr, restTokens2)
         Just _ -> Nothing
         Nothing -> Nothing
-parseInteger (IntTok n : restTokens) = Just (BConst n, restTokens)
-parseInteger (TrueTok : restTokens) =  Just (BTrue, restTokens)
-parseInteger (VarTok n : restTokens) = Just (BVar n, restTokens)
-parseInteger _ = Nothing
+
+parseInteger (IntTok n : restTokens) = 
+    trace ("Parsing IntTok with value: " ++ show n ++ ", restTokens: " ++ show restTokens) $
+    Just (BConst n, restTokens)
+
+parseInteger (TrueTok : restTokens) =  
+    trace ("Parsing TrueTok with restTokens: " ++ show restTokens) $
+    Just (BTrue, restTokens)
+
+parseInteger (VarTok n : restTokens) = 
+    trace ("Parsing VarTok with name: " ++ show n ++ ", restTokens: " ++ show restTokens) $
+    Just (BVar n, restTokens)
+
+parseInteger tokens = 
+    trace ("In the fallback case of parseInteger with tokens: " ++ show tokens) $
+    Nothing
 
 parseInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
 parseInequalityOrInt tokens = 
@@ -320,20 +333,26 @@ parseNegationOrEqualityOrInequalityOrInt tokens =
                 Nothing -> Nothing
         _ -> parseEqualityOrInequalityOrInt tokens
 
-
 parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
-parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens =
-    -- case parseArithmeticEquality tokens of
-    --     Just result -> Just result
-    --     Nothing ->  
-            case parseNegationOrEqualityOrInequalityOrInt tokens of
-                Just (expr1, BoolEqTok : restTokens1) ->
-                    trace ("BEFORE PARSENEG, tokens: " ++ show expr1) $
-                    case parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
-                        Just (expr2, restTokens2) -> Just (Eq expr1 expr2, restTokens2)
-                        Nothing -> error "Error parsing arithmetic equality, right side"
-                result -> result
-
+parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens = 
+    trace ("before trace parseneg" ++ show tokens) $ 
+    case parseNegationOrEqualityOrInequalityOrInt tokens of
+        Just (expr1, BoolEqTok : restTokens1) ->
+            trace ("after trace parseneg" ++ show restTokens1) $
+            case parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
+                Just (expr2, restTokens2) -> Just (Eq expr1 expr2, restTokens2)
+                Nothing -> Nothing
+        result -> result
+        -- _ -> 
+        --     case parseAddOrSubMultOrAexpOrPar tokens of
+        --         Just (aexp1, IntEqTok : restTokens1) ->
+        --             trace ("Parsing arithmetic equality, left side: " ++ show aexp1) $
+        --             case parseAddOrSubMultOrAexpOrPar restTokens1 of
+        --                 Just (aexp2, restTokens2) -> 
+        --                     trace ("Parsing arithmetic equality, right side: " ++ show aexp2) $
+        --                     Just (EqAexp aexp1 aexp2, restTokens2)
+        --                 Nothing -> Nothing
+        --         _ -> Nothing
 
 -- parseArithmeticEquality :: [Token] -> Maybe (Bexp, [Token])
 -- parseArithmeticEquality tokens =
@@ -406,19 +425,20 @@ parseStm :: [Token] -> Maybe (Stm, [Token])
 parseStm tokens = 
     case tokens of
         (IfTok : restTokens1) ->
-            -- trace ("Parsing If Statement, tokens: " ++ show restTokens1) $
+            trace ("Parsing If Statement, tokens: " ++ show restTokens1) $
             case parseConjunctionOrBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
                 Just (cond, ThenTok : restTokens2) ->
-                    -- trace ("Parsed condition of If Statement, tokens: " ++ show restTokens2) $
+                    trace ("Parsed condition of If Statement, tokens: " ++ show restTokens2) $
                     case parseStmSeq restTokens2 of
                         Just (stmSeqThen, ElseTok : restTokens3) ->
-                            -- trace ("Parsed Then branch of If Statement, tokens: " ++ show restTokens3) $
+                            trace ("Parsed Then branch of If Statement, tokens: " ++ show restTokens3) $
                             case parseElseBlock restTokens3 of
                                 Just (stmSeqElse, restTokens4) -> Just (If cond stmSeqThen stmSeqElse, restTokens4)
                                 Nothing ->  
-                                    -- trace ("Parsing Else branch of If Statement, tokens: " ++ show restTokens3) $
+                                    trace ("Parsing Else branch of If Statement, tokens: " ++ show restTokens3) $
                                     case parseStm restTokens3 of
                                         Just (stmElse, restTokens4) -> Just (If cond stmSeqThen [stmElse], restTokens4)
+                                        -- Nothing -> Nothing
                                         Nothing -> error "Error parsing Else branch"
                         Nothing -> error "Error parsing Then branch"
                 Nothing -> error "Error parsing condition of If Statement"
@@ -473,23 +493,23 @@ executeProgram programCode = do
 -- Examples:
 main :: IO ()
 main = do
-    print $ testParser "x := 5; x := x - 1;" == ("","x=4")
-    print $ testParser "x := 0 - 2;" == ("","x=-2")
-    print $ testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
-    print $ testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;);" == ("","x=1")
-    print $ testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
-    print $ testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
-    print $ testParser "x := 44; if x <= 43 then x := 1; else (x := 33; x := x+1;); y := x*2;" == ("","x=34,y=68")
-    print $ testParser "x := 42; if x <= 43 then (x := 33; x := x+1;) else x := 1;" == ("","x=34")
+    -- print $ testParser "x := 5; x := x - 1;" == ("","x=4")
+    -- print $ testParser "x := 0 - 2;" == ("","x=-2")
+    -- print $ testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
+    -- print $ testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;);" == ("","x=1")
+    -- print $ testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
+    -- print $ testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
+    -- print $ testParser "x := 44; if x <= 43 then x := 1; else (x := 33; x := x+1;); y := x*2;" == ("","x=34,y=68")
+    -- print $ testParser "x := 42; if x <= 43 then (x := 33; x := x+1;) else x := 1;" == ("","x=34")
     -- testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
     -- let programCode = "if (-- testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
     -- let parsedResult = parse programCode
     -- putStrLn "Parsed Result:"
     -- print parsedResult
-    -- print $ testParser "if (1+1 == 2 = 1 == 1) then x := 1; else x := 2;" == ("","x=1")
+    print $ testParser "if (1 + 1 == 2 = 1 + 2 == 3) then x := 1; else x := 2;" == ("","x=1")
     -- print $ testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
-    print $ testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
+    -- print $ testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
     -- print $ testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
-    putStrLn "Enter the program code:"
-    programCode <- getLine
-    executeProgram programCode
+    -- putStrLn "Enter the program code:"
+    -- programCode <- getLine
+    -- executeProgram programCode
