@@ -323,22 +323,31 @@ parseNegationOrEqualityOrInequalityOrInt tokens =
 
 parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
 parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens =
-    -- case parseAddOrSubMultOrAexpOrPar tokens of
-    --     Just (aexp1, IntEqTok : restTokens1) ->
-    --         trace ("BEFORE PARSEQ, tokens: " ++ show aexp1) $
-    --         case parseAddOrSubMultOrAexpOrPar restTokens1 of
-    --             Just (aexp2, restTokens2) -> 
-    --                 trace ("AFTER PARSEQ, tokens: " ++ show aexp2 ++ show restTokens2) $
-    --                 Just (EqAexp aexp1 aexp2, restTokens2)
-    --             Nothing -> error "Error parsing Then branch"
-    --     Nothing -> 
+    -- case parseArithmeticEquality tokens of
+    --     Just result -> Just result
+    --     Nothing ->  
             case parseNegationOrEqualityOrInequalityOrInt tokens of
                 Just (expr1, BoolEqTok : restTokens1) ->
                     trace ("BEFORE PARSENEG, tokens: " ++ show expr1) $
                     case parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt restTokens1 of
                         Just (expr2, restTokens2) -> Just (Eq expr1 expr2, restTokens2)
-                        Nothing -> Nothing
+                        Nothing -> error "Error parsing arithmetic equality, right side"
                 result -> result
+
+
+-- parseArithmeticEquality :: [Token] -> Maybe (Bexp, [Token])
+-- parseArithmeticEquality tokens =
+--     trace ("BEFORE PARSEadd, tokens: " ++ show tokens) $
+--     case parseAddOrSubMultOrAexpOrPar tokens of
+--         Just (aexp1, IntEqTok : restTokens1) ->
+--             trace ("Parsing arithmetic equality, left side: " ++ show aexp1) $
+--             case parseAddOrSubMultOrAexpOrPar restTokens1 of
+--                 Just (aexp2, restTokens2) -> 
+--                     trace ("Parsing arithmetic equality, right side: " ++ show aexp2) $
+--                     Just (EqAexp aexp1 aexp2, restTokens2)
+--                 Nothing -> error "Error parsing arithmetic equality, right side"
+--         Nothing -> Nothing
+
 
 -- parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
 -- parseBooleanEqualityOrNegationOrEqualityOrInequalityOrInt tokens =
