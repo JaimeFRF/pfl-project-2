@@ -189,12 +189,6 @@ After loading and running `main` the user is given 3 options:
 - Enter 2 to run Part 2 tests
 - Enter 3 to run input string
 
+## Conclusion 
 
-
-
-
-
-
-
-
-
+In conclusion, the task was successfully done: implementing a machine simulator and a compiler using Haskell. The project demonstrated a deep understanding of complex concepts such as data types, parsing, and compilation. Our system efficiently translates high-level imperative language into executable machine code, showcasing Haskell's power in handling computational tasks. The implementation of a user-friendly interface for input and testing further illustrates the project's practical applicability. Overall, this project stands as a testament to our ability to tackle and overcome challenging computational problems.
