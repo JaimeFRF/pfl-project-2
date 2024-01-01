@@ -196,6 +196,7 @@ lexer (')' : restStr) = CloseTok : lexer restStr
 lexer (':':'=':rest) = AssignTok : lexer rest 
 lexer (';' : restStr) = SemicolonTok : lexer restStr
 lexer ('T': 'r':'u':'e' : restStr) = TrueTok : lexer restStr
+lexer ('F': 'a':'l':'s':'e' : restStr) = FalseTok : lexer restStr
 lexer ('n':'o':'t' : restStr) = NotTok : lexer restStr
 lexer ('i':'f':restStr) = IfTok : lexer restStr
 lexer ('t':'h':'e':'n':restStr) = ThenTok : lexer restStr
@@ -218,7 +219,6 @@ parseAexp tokens =
         (IntTok n : restTokens) -> Just (Const n, restTokens)
         (VarTok v : restTokens) -> Just (Var v, restTokens)
         _ -> Nothing
-
 
 parseAexpOrPar :: [Token] -> Maybe (Aexp, [Token])
 parseAexpOrPar (OpenTok : restTokens1) = 
@@ -265,6 +265,9 @@ parseInteger (IntTok n : restTokens) =
 parseInteger (TrueTok : restTokens) =  
     Just (BTrue, restTokens)
 
+parseInteger (FalseTok : restTokens) =  
+    Just (BFalse, restTokens)
+
 parseInteger (VarTok n : restTokens) = 
     Just (BVar n, restTokens)
 
@@ -288,7 +291,6 @@ parseEqualityOrInequalityOrInt tokens =
                 Just (expr2, restTokens2) -> Just (EqAexp expr1 expr2, restTokens2)
                 Nothing -> Nothing
         _ -> parseInequalityOrInt tokens
-
 
 parseNegationOrEqualityOrInequalityOrInt :: [Token] -> Maybe (Bexp, [Token])
 parseNegationOrEqualityOrInequalityOrInt tokens = 
@@ -441,11 +443,10 @@ executeProgram programCode = do
     putStrLn "Final State:"
     putStrLn (state2Str finalState)
 
--- Examples:
-main :: IO ()
-main = do
-    ---------------------------------------------------------------------------------------
-    -- PART 1 TESTS
+runPart1Tests :: IO ()
+runPart1Tests = do
+    -- Part 1 tests
+    putStrLn "--------------------------- PART 1 TESTS ------------------------"
     print $ testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
     print $ testAssembler [Fals,Push 3,Tru,Store "var",Store "a", Store "someVar"] == ("","a=3,someVar=False,var=True")
     print $ testAssembler [Fals,Store "var",Fetch "var"] == ("False","var=False")
@@ -461,8 +462,12 @@ main = do
     -- If you test:
     -- testAssembler [Tru,Tru,Store "y", Fetch "x",Tru]
     -- You should get an exception with the string: "Run-time error"
-    ---------------------------------------------------------------------------------------
-    -- PART 2 TESTS
+    putStrLn "-----------------------------------------------------------------"
+    
+runPart2Tests :: IO ()
+runPart2Tests = do
+    -- Part 2 tests 
+    putStrLn "--------------------------- PART 2 TESTS ------------------------"
     print $ testParser "x := 5; x := x - 1;" == ("","x=4")
     print $ testParser "x := 0 - 2;" == ("","x=-2")
     print $ testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
@@ -490,7 +495,19 @@ main = do
     print $ testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
     print $ testParser "x := 42; if x <= 43 then (x := 1; x:= x+ 1;); else (x := 33; x := x+1;);" == ("","x=2")
     print $ testParser "x := 42; if x <= 43 then (if x <= 42 then (x := 1; x:= x + 1;); else x := 33;); else x := x+1;" == ("", "x=2")
-    ---------------------------------------------------------------------------------------
-    -- putStrLn "Enter the program code:"
-    -- programCode <- getLine
-    -- executeProgram programCode
+    putStrLn "-----------------------------------------------------------------"
+
+-- Examples:
+main :: IO ()
+main = do
+    putStrLn "\n"
+    putStrLn "Enter 1 to run Part 1 tests, 2 to run Part 2 tests, or 3 to execute your own program code:"
+    userInput <- getLine
+    case userInput of
+        "1" -> runPart1Tests
+        "2" -> runPart2Tests
+        "3" -> do
+            putStrLn "Enter the program code:"
+            programCode <- getLine
+            executeProgram programCode
+        _ -> putStrLn "Invalid input. Please enter 1, 2, or 3."
